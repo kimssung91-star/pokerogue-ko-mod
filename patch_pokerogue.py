@@ -35,14 +35,14 @@ def patch(root: Path, require_sha: bool = False) -> list[str]:
     result["src/overrides.ts"] = one(
         result["src/overrides.ts"],
         "const overrides = {} satisfies Partial<InstanceType<OverridesType>>;",
-        """const overrides = {
+        """const overrides: Partial<InstanceType<OverridesType>> = {
   // Local-only changes. Original online account stays untouched.
   XP_MULTIPLIER_OVERRIDE: 5,
   // Current upstream mode uses absolute amount. Base Classic = 1000.
   STARTING_MONEY_OVERRIDE: 111000,
   // null = natural shiny probability; false would force zero shinies.
   SHINY_OVERRIDE: null,
-} satisfies Partial<InstanceType<OverridesType>>;""",
+};""",
         "override defaults"
     )
     data = result["src/system/game-data.ts"]
