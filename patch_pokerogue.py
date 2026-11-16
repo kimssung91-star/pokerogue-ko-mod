@@ -9,7 +9,7 @@ import subprocess
 
 EXPECTED_SHA = "59a3eed012eb6de0a4b264f61b9fa9e38e62db38"
 EXPECTED_VERSION = "1.12.2.6"
-XP_MULTIPLIER = 5
+XP_MULTIPLIER = 10
 STARTING_GOLD = 1000 * 111
 
 def one(s: str, old: str, new: str, label: str) -> str:
@@ -20,7 +20,7 @@ def one(s: str, old: str, new: str, label: str) -> str:
 
 def patch(root: Path, require_sha: bool = False) -> list[str]:
     root = root.resolve()
-    required = ("src/overrides.ts", "src/system/game-data.ts", "index.html", ".env.development", "package.json")
+    required = ("src/overrides.ts", "src/system/game-data.ts", "src/field/pokemon.ts", "src/phases/move-phase.ts", "index.html", ".env.development", "package.json")
     for name in required:
         if not (root/name).is_file():
             raise RuntimeError(f"Missing upstream file: {name}")
@@ -37,7 +37,7 @@ def patch(root: Path, require_sha: bool = False) -> list[str]:
         "const overrides = {} satisfies Partial<InstanceType<OverridesType>>;",
         """const overrides: Partial<InstanceType<OverridesType>> = {
   // Local-only changes. Original online account stays untouched.
-  XP_MULTIPLIER_OVERRIDE: 5,
+  XP_MULTIPLIER_OVERRIDE: 10,
   // Current upstream mode uses absolute amount. Base Classic = 1000.
   STARTING_MONEY_OVERRIDE: 111000,
   // null = natural shiny probability; false would force zero shinies.
@@ -84,6 +84,45 @@ def patch(root: Path, require_sha: bool = False) -> list[str]:
         "  private initStarterData(): void {",
         method + "  private initStarterData(): void {",
         "starter unlocking method")
+
+    pokemon = result["src/field/pokemon.ts"]
+    pokemon = one(
+        pokemon,
+        """  public getMoveset(ignoreOverride = false): PokemonMove[] {
+    // Override moveset based on arrays specified in overrides.ts""",
+        """  public getMoveset(ignoreOverride = false): PokemonMove[] {
+    // Private mod: refill PP for every allied Pokemon whenever its moveset is accessed.
+    // Covers ordinary and temporarily transformed moves, as well as existing saves.
+    // Enemy Pokemon PP is intentionally unaffected.
+    if (this.isPlayer()) {
+      for (const move of this.moveset) {
+        move.ppUsed = 0;
+      }
+      for (const move of this.summonData.moveset ?? []) {
+        move.ppUsed = 0;
+      }
+    }
+    // Override moveset based on arrays specified in overrides.ts""",
+        "player-only PP reset")
+    result["src/field/pokemon.ts"] = pokemon
+
+    move_phase = result["src/phases/move-phase.ts"]
+    move_phase = one(
+        move_phase,
+        """    if (move.getMove().pp !== -1 && !isIgnorePP(this.useMode) && move.ppUsed >= move.getMovePp()) {""",
+        """    if (!this.pokemon.isPlayer() && move.getMove().pp !== -1 && !isIgnorePP(this.useMode) && move.ppUsed >= move.getMovePp()) {""",
+        "player-only PP availability")
+    move_phase = one(
+        move_phase,
+        """    move.usePp(ppHolder.value);
+    globalScene.eventTarget.dispatchEvent(new MoveUsedEvent(this.pokemon.id, move.getMove(), move.ppUsed));""",
+        """    // Do not consume PP for player Pokemon, but preserve MoveUsedEvent for game logic.
+    if (!user.isPlayer()) {
+      move.usePp(ppHolder.value);
+    }
+    globalScene.eventTarget.dispatchEvent(new MoveUsedEvent(this.pokemon.id, move.getMove(), move.ppUsed));""",
+        "skip PP consumption without skipping move event")
+    result["src/phases/move-phase.ts"] = move_phase
     html = result["index.html"]
     html = one(html, '<html lang="en">', '<html lang="ko">', "HTML language")
     html = one(html, '<title>PokéRogue</title>', '<title>PokéRogue — 개인용 한국어 개조판</title>', "page title")
@@ -104,10 +143,13 @@ def patch(root: Path, require_sha: bool = False) -> list[str]:
         raise RuntimeError("Expected exactly one configured API URL")
     result[".env.development"] = env.replace(matches[0], "VITE_SERVER_URL=https://offline.invalid")
     # Validate all anchor matches before any write.
-    assert result["src/overrides.ts"].count("XP_MULTIPLIER_OVERRIDE: 5,") == 1
+    assert result["src/overrides.ts"].count("XP_MULTIPLIER_OVERRIDE: 10,") == 1
     assert result["src/overrides.ts"].count("STARTING_MONEY_OVERRIDE: 111000,") == 1
     assert result["src/overrides.ts"].count("SHINY_OVERRIDE: null,") == 1
     assert result["src/system/game-data.ts"].count("this.applyPersonalUnlocks();") == 2
+    assert result["src/field/pokemon.ts"].count("for (const move of this.summonData.moveset ?? [])") == 1
+    assert result["src/phases/move-phase.ts"].count("if (!user.isPlayer()) {") >= 1
+    assert result["src/phases/move-phase.ts"].count("globalScene.eventTarget.dispatchEvent(new MoveUsedEvent") >= 1
     assert result[".env.development"].count("offline.invalid") == 1
     for name, new_text in result.items():
         p = root / name
