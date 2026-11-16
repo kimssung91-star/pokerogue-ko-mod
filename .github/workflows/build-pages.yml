@@ -1,0 +1,101 @@
+name: Build Korean PokéRogue Mod
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pokerogue-private-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout private mod configuration
+        uses: actions/checkout@v4
+
+      - name: Test local patch logic
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Fetch pinned official PokeRogue source and assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init upstream
+          git -C upstream remote add origin https://github.com/pagefaultgames/pokerogue.git
+          git -C upstream fetch --depth 1 origin 59a3eed012eb6de0a4b264f61b9fa9e38e62db38
+          git -C upstream checkout --detach FETCH_HEAD
+          git -C upstream submodule update --init --recursive --depth 1
+          test -f upstream/locales/ko/menu.json
+          test -f upstream/assets/service-worker.js
+
+      - name: Apply verified independent mod
+        run: python3 patch_pokerogue.py upstream --require-sha
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install JavaScript dependencies
+        working-directory: upstream
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check modified source
+        working-directory: upstream
+        run: pnpm typecheck
+
+      - name: Build standalone browser client
+        working-directory: upstream
+        run: pnpm build:dev
+        env:
+          VITE_BYPASS_LOGIN: '1'
+          VITE_SERVER_URL: https://offline.invalid
+
+      - name: Assemble assets and Korean translations
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p upstream/dist/locales
+          rsync -a --exclude='.git' --exclude='.github' --exclude='test' \
+            --exclude='package.json' --exclude='pnpm-lock.yaml' \
+            --exclude='pnpm-workspace.yaml' --exclude='tsconfig.json' \
+            --exclude='vitest.config.ts' \
+            upstream/assets/ upstream/dist/
+          rsync -a --exclude='.git' upstream/locales/ upstream/dist/locales/
+          touch upstream/dist/.nojekyll
+          python3 verify_build.py upstream
+          du -sh upstream/dist
+          bytes=$(du -sb upstream/dist | cut -f1)
+          if [ "$bytes" -ge 1000000000 ]; then
+            echo "::error::Static site exceeds GitHub Pages 1GB limit. A separate static asset host is required."
+            exit 1
+          fi
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: upstream/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
