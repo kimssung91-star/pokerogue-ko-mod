@@ -134,6 +134,7 @@ def patch(root: Path, require_sha: bool = False) -> list[str]:
         "Korean first use")
     html = html.replace('<link rel="canonical" href="https://pokerogue.net" />', '')
     html = html.replace('<meta property="og:url" content="https://pokerogue.net" />', '')
+    html = one(html, '<script type="module" src="./src/main.ts"></script>', '<script defer src="./backup-manager.js"></script>\n\t<script type="module" src="./src/main.ts"></script>', "backup manager HTML loader")
     result["index.html"] = html
     env = result[".env.development"]
     if env.splitlines().count("VITE_BYPASS_LOGIN=1") != 1:
@@ -150,6 +151,7 @@ def patch(root: Path, require_sha: bool = False) -> list[str]:
     assert result["src/field/pokemon.ts"].count("for (const move of this.summonData.moveset ?? [])") == 1
     assert result["src/phases/move-phase.ts"].count("if (!user.isPlayer()) {") >= 1
     assert result["src/phases/move-phase.ts"].count("globalScene.eventTarget.dispatchEvent(new MoveUsedEvent") >= 1
+    assert result["index.html"].count('src="./backup-manager.js"') == 1
     assert result[".env.development"].count("offline.invalid") == 1
     for name, new_text in result.items():
         p = root / name
