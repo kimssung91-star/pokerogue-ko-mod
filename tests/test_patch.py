@@ -63,6 +63,7 @@ class TestPrivatePatch(unittest.TestCase):
             self.assertIn("new MoveUsedEvent", phase)
             self.assertIn("DexAttr.NON_SHINY", g)
             self.assertIn('lang="ko"', (path / "index.html").read_text())
+            self.assertIn('src="./backup-manager.js"', (path / "index.html").read_text())
 
     def test_source_change_fails_before_writing(self):
         with tempfile.TemporaryDirectory() as d:
