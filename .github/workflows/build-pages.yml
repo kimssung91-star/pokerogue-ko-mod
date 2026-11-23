@@ -53,6 +53,9 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Validate backup manager JavaScript syntax
+        run: node --check web/backup-manager.js
+
       - name: Install JavaScript dependencies
         working-directory: upstream
         run: pnpm install --frozen-lockfile
