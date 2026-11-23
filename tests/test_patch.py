@@ -38,7 +38,7 @@ class TestPrivatePatch(unittest.TestCase):
     globalScene.eventTarget.dispatchEvent(new MoveUsedEvent(this.pokemon.id, move.getMove(), move.ppUsed));
   }
 """)
-        (base / "index.html").write_text('<html lang="en"><meta charset="UTF-8" /><title>PokéRogue</title><link rel="canonical" href="https://pokerogue.net" /><meta property="og:url" content="https://pokerogue.net" />')
+        (base / "index.html").write_text('<html lang="en"><meta charset="UTF-8" /><title>PokéRogue</title><link rel="canonical" href="https://pokerogue.net" /><meta property="og:url" content="https://pokerogue.net" /><script type="module" src="./src/main.ts"></script>')
         (base / ".env.development").write_text("VITE_BYPASS_LOGIN=1\nVITE_SERVER_URL=http://localhost:8001\n")
         (base / "package.json").write_text(json.dumps({"version": EXPECTED_VERSION}))
 
