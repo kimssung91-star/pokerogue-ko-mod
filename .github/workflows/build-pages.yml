@@ -79,6 +79,7 @@ jobs:
             --exclude='vitest.config.ts' \
             upstream/assets/ upstream/dist/
           rsync -a --exclude='.git' upstream/locales/ upstream/dist/locales/
+          cp web/backup-manager.js upstream/dist/backup-manager.js
           touch upstream/dist/.nojekyll
           python3 verify_build.py upstream
           du -sh upstream/dist
