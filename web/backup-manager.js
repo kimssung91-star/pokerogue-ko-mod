@@ -211,15 +211,17 @@
   function initialize() {
     const panel = document.createElement("div");
     panel.id = "pkr-personal-backup-ui";
-    panel.style.cssText = "position:fixed;left:10px;bottom:10px;z-index:2147483647;color:#fff;font:12px/1.5 sans-serif;text-align:left";
+    panel.style.cssText = "position:fixed;right:5px;top:5px;z-index:2147483647;color:#fff;font:12px/1.5 sans-serif;text-align:left;display:flex;flex-direction:column;align-items:flex-end";
     const toggle = document.createElement("button");
     toggle.type = "button";
-    toggle.textContent = "💾 백업";
+    toggle.textContent = "💾";
+    toggle.title = "백업 메뉴 (Alt+B)";
     toggle.setAttribute("aria-label", "포켓로그 백업 메뉴 열기");
-    toggle.style.cssText = "background:#243348;color:#fff;border:1px solid #d2e2f3;border-radius:6px;padding:7px 9px;cursor:pointer;opacity:.90";
+    toggle.style.cssText = "width:24px;height:24px;padding:0;line-height:22px;font-size:13px;background:#243348;color:#fff;border:1px solid #d2e2f3;border-radius:5px;cursor:pointer;opacity:.22;transition:opacity .15s";
+    toggle.setAttribute("aria-expanded", "false");
     const drawer = document.createElement("div");
     drawer.hidden = true;
-    drawer.style.cssText = "width:min(310px,85vw);max-height:65vh;overflow:auto;background:#1a2534;border:1px solid #a3b3ca;border-radius:8px;padding:12px;box-shadow:0 4px 20px #0009;margin-bottom:5px;white-space:normal";
+    drawer.style.cssText = "width:min(310px,85vw);max-height:65vh;overflow:auto;background:#1a2534;border:1px solid #a3b3ca;border-radius:8px;padding:12px;box-shadow:0 4px 20px #0009;margin-top:5px;white-space:normal";
     drawer.innerHTML = '<strong style="font-size:14px">포켓로그 로컬 백업</strong><p style="margin:6px 0">브라우저 저장과 별도로 파일을 내려받고 복원합니다. 다운로드 폴더는 브라우저 설정을 따릅니다.</p>';
     const manual = document.createElement("button");
     manual.type = "button";
@@ -246,13 +248,37 @@
     statusNode.setAttribute("role", "status");
     statusNode.style.cssText = "font-size:11px;max-height:70px;overflow:auto;margin-top:8px;color:#d7f9e2";
     drawer.append(manual, restore, fileInput, label, help, statusNode);
-    panel.append(drawer, toggle);
+    panel.append(toggle, drawer);
     document.body.appendChild(panel);
 
     panel.addEventListener("pointerdown", e => e.stopPropagation());
     panel.addEventListener("click", e => e.stopPropagation());
     panel.addEventListener("keydown", e => e.stopPropagation());
-    toggle.addEventListener("click", () => { drawer.hidden = !drawer.hidden; });
+    function setDrawerOpen(open) {
+      drawer.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.style.opacity = open ? ".94" : ".22";
+    }
+    toggle.addEventListener("click", () => { setDrawerOpen(drawer.hidden); });
+    toggle.addEventListener("pointerenter", () => { toggle.style.opacity = ".94"; });
+    toggle.addEventListener("pointerleave", () => {
+      if (drawer.hidden) toggle.style.opacity = ".22";
+    });
+    document.addEventListener("pointerdown", event => {
+      if (!drawer.hidden && !panel.contains(event.target)) setDrawerOpen(false);
+    }, true);
+    window.addEventListener("keydown", event => {
+      // The backup interface must remain available without occupying game space.
+      if (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "KeyB") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setDrawerOpen(drawer.hidden);
+      } else if (event.code === "Escape" && !drawer.hidden) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setDrawerOpen(false);
+      }
+    }, true);
     manual.addEventListener("click", () => {
       const b = backupNow();
       if (b && autoInput.checked) {
